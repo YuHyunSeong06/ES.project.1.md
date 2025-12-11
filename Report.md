@@ -25,7 +25,6 @@
 4.  **Interface (앱):** MIT App Inventor로 제작된 앱에서 타이머 및 잠금 제어.
 
 ---
----
 ## 3. 하드웨어 구현 (Hardware Implementation)
 
 **3.1. 주요 부품 구성**
@@ -49,8 +48,6 @@
 
 ---
 
----
-
 ## 4. 소프트웨어 구현 (Software Implementation)
 
 ### 4.1. Arduino 펌웨어 (Firmware)
@@ -58,6 +55,108 @@
 * **서보모터 제어:** 일반 각도 제어가 아닌 연속 회전 서보의 특성을 반영하여 구현.
     * **잠금:** `1700`(회전) 신호 전송 → `delay`(이동 시간) → `1508`(정지)
     * **해제:** `1300`(역회전) 신호 전송 → `delay`(이동 시간) → `1508`(정지)
+ 
+```cpp
+  #include "HX711.h"
+#include <Servo.h>
+#include <SoftwareSerial.h>
+
+// 핀 설정
+#define LOADCELL_DOUT_PIN 2
+#define LOADCELL_SCK_PIN 3
+#define BT_TX 4  // 블루투스 TX -> 아두이노 D4
+#define BT_RX 5  // 블루투스 RX -> 아두이노 D5
+#define SERVO_PIN 9 // 서보모터 신호선
+
+HX711 scale;
+Servo myServo;
+SoftwareSerial BT(BT_TX, BT_RX);
+
+float calibration_factor = 0.0; 
+long weight_threshold = 20; // 20kg 기준
+
+// 서보모터 설정값 (Parallax 연속회전 서보 기준)
+const int SERVO_STOP = 1508; // 정지값 (사용자 지정)
+const int SERVO_CW = 1300;   // 시계방향 회전 속도 (값 조절 가능)
+const int SERVO_CCW = 1700;  // 반시계방향 회전 속도 (값 조절 가능)
+const int MOVE_TIME = 1000;  // 모터가 움직이는 시간 (ms) -> 90도만큼 돌 시간을 테스트해서 수정 필요!
+
+bool isLocked = false;
+
+void setup() {
+  Serial.begin(9600); // PC(Processing) 통신
+  BT.begin(9600);     // 앱(App Inventor) 통신
+
+  // 로드셀 초기화
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  scale.set_scale(calibration_factor);
+  scale.tare(); 
+
+  // 서보모터 초기화
+  myServo.attach(SERVO_PIN);
+  myServo.writeMicroseconds(SERVO_STOP); // 시작하자마자 정지 상태 유지
+  isLocked = false;
+}
+
+void loop() {
+  // 1. 무게 측정
+  float weight = scale.get_units(5);
+
+  // 2. 데이터 전송 (1: 착석, 0: 공석)
+  // 값이 너무 튀는 것을 방지하기 위해 정수형으로 변환하거나 단순화
+  if (weight >= weight_threshold) {
+    Serial.println(1); // PC로 전송
+    BT.write("1");     // 앱으로 전송
+  } else {
+    Serial.println(0); // PC로 전송
+    BT.write("0");     // 앱으로 전송
+  }
+
+  // 3. 앱 명령 수신 (L: 잠금, U: 해제)
+  if (BT.available()) {
+    char cmd = BT.read();
+    if (cmd == 'L') {
+      lockChair();
+    } else if (cmd == 'U') {
+      unlockChair();
+    }
+  }
+  delay(200);
+}
+
+// 잠금 함수
+void lockChair() {
+  if (!isLocked) {
+    // 1. 잠금 방향으로 회전 시작
+    myServo.writeMicroseconds(SERVO_CCW); // 1700 (방향 반대면 SERVO_CW로 변경)
+    
+    // 2. 90도 정도 움직일 때까지 기다림 (시간으로 제어)
+    delay(MOVE_TIME); 
+    
+    // 3. 정지
+    myServo.writeMicroseconds(SERVO_STOP); // 1508
+    
+    isLocked = true;
+  }
+}
+
+// 해제 함수 (원상복구)
+void unlockChair() {
+  // 잠금 상태일 때만 동작 (중복 실행 방지)
+  // 혹은 강제 해제를 위해 조건 없이 실행 가능
+  
+  // 1. 반대 방향(해제 방향)으로 회전 시작
+  myServo.writeMicroseconds(SERVO_CW); // 1300 (방향 반대면 SERVO_CCW로 변경)
+  
+  // 2. 원래 위치로 돌아올 때까지 기다림
+  delay(MOVE_TIME); 
+  
+  // 3. 정지
+  myServo.writeMicroseconds(SERVO_STOP); // 1508
+  
+  isLocked = false;
+}
+```
 
 ### 4.2. 모바일 앱 (MIT App Inventor)
 * **UI 디자인:**
@@ -73,14 +172,84 @@
 * 아두이노와 Serial(USB) 통신을 통해 현재 센서 데이터 수신.
 * 앱 화면을 보지 않고도 PC 화면에서 **"STATUS: SEATED"** 또는 **"EMPTY"** 상태를 시각적으로 모니터링 가능한 대시보드 구현.
 
-**[여기에 Processing 실행 화면 캡처를 첨부하세요]**
+```java
+import processing.serial.*;
+
+Serial COM4;  // 아두이노와 통신할 객체
+String val;     // 수신된 데이터를 저장할 변수
+
+void setup() {
+  size(600, 600); // 창 크기 설정
+  
+  // [중요] 사용자의 PC에 연결된 아두이노 포트를 찾습니다.
+  // 콘솔창(검은 부분)에 뜨는 목록을 보고, 아두이노가 연결된 번호(인덱스)를 적어야 합니다.
+  printArray(Serial.list());
+  
+  // 보통 0번이나 1번 포트입니다. 연결이 안 되면 [0]을 [1]이나 [2]로 바꿔보세요.
+  // Windows의 경우 "COM3" 처럼 직접 이름을 적어도 됩니다. 예: new Serial(this, "COM3", 9600);
+  String portName = Serial.list()[0]; 
+  
+  myPort = new Serial(this, portName, 9600);
+  
+  // 폰트 및 정렬 설정
+  textAlign(CENTER, CENTER);
+  textSize(40);
+}
+
+void draw() {
+  // 아두이노에서 데이터가 들어오면 읽기
+  if (myPort.available() > 0) {
+    val = myPort.readStringUntil('\n'); // 줄바꿈 문자까지 읽기
+  }
+  
+  // 데이터가 비어있지 않다면 처리
+  if (val != null) {
+    val = trim(val); // 공백 제거 (매우 중요)
+    
+    // --- [1] 착석 감지 (20kg 이상) ---
+    if (val.equals("1")) {
+      background(255); // 하얀색 배경 (앱과 동일)
+      
+      fill(0); // 검은색 글씨
+      text("STATUS: SEATED", width/2, height/2 - 50);
+      text("Waiting for LOCK...", width/2, height/2 + 50);
+      
+      // 시각적 효과 (의자 아이콘 등)
+      noFill();
+      stroke(0);
+      strokeWeight(5);
+      rectMode(CENTER);
+      rect(width/2, height/2, 400, 400); // 테두리 박스
+    } 
+    // --- [0] 공석 (20kg 미만) ---
+    else if (val.equals("0")) {
+      background(0); // 검은색 배경 (앱과 동일)
+      
+      fill(255); // 하얀색 글씨
+      text("STATUS: EMPTY", width/2, height/2);
+      
+      // 시각적 효과
+      stroke(255);
+      strokeWeight(2);
+      rectMode(CENTER);
+      rect(width/2, height/2, 400, 400); // 테두리 박스
+    }
+  }
+}
+```
 
 ---
 
 ## 5. 결과 및 검증 (Results)
 
-### 5.1. 기능 테스트 결과
+### 5.1. 기능 테스트 목표 결과
 1.  **무게 인식:** 20kg 이상의 하중이 가해졌을 때, 앱 화면이 즉시 흰색으로 전환됨을 확인.
+2.  **잠금 장치:** 앱에서 LOCK 버튼을 누르면 서보모터가 지정된 시간만큼 회전하여 잠금 위치로 이동 후 정지함.
+3.  **타이머 연동:** 30초 카운트다운이 종료되면 자동으로 모터가 역회전하여 잠금 해제됨을 확인.
+4.  **긴급 해제:** 카운트다운 도중 EMERGENCY 버튼 클릭 시 즉시 잠금 해제됨을 확인.
+
+### 5.2. 기능 테스트 목표 실제 결과
+1.  **무게 인식:** 20kg 이상의 하중이 가해졌을 때, 앱 화면이 즉시 흰색으로 전환됨을 확인했지만 hx117회로가 자꾸 빠지면서 무게에 오류가 생김
 2.  **잠금 장치:** 앱에서 LOCK 버튼을 누르면 서보모터가 지정된 시간만큼 회전하여 잠금 위치로 이동 후 정지함.
 3.  **타이머 연동:** 30초 카운트다운이 종료되면 자동으로 모터가 역회전하여 잠금 해제됨을 확인.
 4.  **긴급 해제:** 카운트다운 도중 EMERGENCY 버튼 클릭 시 즉시 잠금 해제됨을 확인.
@@ -88,18 +257,12 @@
 ### 5.2. 문제 해결 과정 (Troubleshooting)
 * **문제:** 서보모터가 멈추지 않고 계속 회전하는 현상 발생.
 * **해결:** 사용된 모터가 '연속 회전 서보'임을 파악하고, 각도(`write`) 제어가 아닌 정지 펄스(`1508`)와 시간 지연(`delay`)을 이용한 제어 방식으로 코드를 수정하여 해결함.
-
+* **문제:** hx117 회로가 고정되지 않고 자꾸 빠져 무게에 측정에 어려움이 생김
 ---
 
-## 6. 결론 및 향후 과제 (Conclusion)
+## 6. 결론
 
-### 6.1. 결론
-본 프로젝트를 통해 저렴한 비용의 오픈소스 하드웨어(Arduino)와 노코딩 툴(App Inventor)을 활용하여, 실제 사용 가능한 수준의 **'습관 형성 스마트 의자' 프로토타입**을 성공적으로 구현하였다. 특히 하드웨어(센서/모터)와 소프트웨어(앱/PC) 간의 유기적인 통신 구조를 설계하고 구현하는 기술을 습득하였다.
-
-### 6.2. 향후 발전 방향
-* **전력 효율화:** 현재의 USB/건전지 전원을 충전식 리튬 배터리 모듈로 개선.
-* **기구 설계:** 3D 프린팅을 활용하여 실제 의자에 부착 가능한 견고한 잠금 장치 하우징 제작.
-* **데이터 분석:** 사용자의 착석 시간 데이터를 DB에 저장하여 학습 리포트를 제공하는 기능 추가.
+본 프로젝트를 통해 저렴한 비용의 오픈소스 하드웨어(Arduino)와 노코딩 툴(App Inventor)을 활용하여, 실제 사용 가능한 수준의 **'습관 형성 스마트 의자' 프로토타입**을 성공적으로 구현하였습니다. 특히 하드웨어(센서/모터)와 소프트웨어(앱/PC) 간의 유기적인 통신 구조를 설계하고 구현하는 기술을 습득하였습니다. 회로를 여태 제대로 설계하고 만져본 경험이 없어 어려움을 겪었고 아직은 완전히 해결하지 못하였지만 이번 보고서를 제출하였다고 끝나는게 아닌 계속해서 문제를 해결하기 위해 노력하겠습니
 
 ---
 **[별첨]**
