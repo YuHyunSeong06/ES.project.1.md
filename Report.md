@@ -194,7 +194,7 @@ void setup() {
   // Windows의 경우 "COM3" 처럼 직접 이름을 적어도 됩니다. 예: new Serial(this, "COM3", 9600);
   String portName = Serial.list()[0]; 
   
-  myPort = new Serial(this, portName, 9600);
+  COM4 = new Serial(this, portName, 9600);
   
   // 폰트 및 정렬 설정
   textAlign(CENTER, CENTER);
@@ -203,8 +203,8 @@ void setup() {
 
 void draw() {
   // 아두이노에서 데이터가 들어오면 읽기
-  if (myPort.available() > 0) {
-    val = myPort.readStringUntil('\n'); // 줄바꿈 문자까지 읽기
+  if (COM4.available() > 0) {
+    val = COM4.readStringUntil('\n'); // 줄바꿈 문자까지 읽기
   }
   
   // 데이터가 비어있지 않다면 처리
