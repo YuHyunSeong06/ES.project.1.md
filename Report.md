@@ -45,6 +45,9 @@
     * **Servo:** Signal $\rightarrow$ D9 (PWM 제어)
     * **Bluetooth:** TX $\rightarrow$ D4, RX $\rightarrow$ D5 (SoftwareSerial 통신)
 * **전원:** 아두이노 5V 출력을 로드셀 모듈과 서보모터의 전원으로 공통 사용 (USB 전원 기반).
+![KakaoTalk_20251211_131352580](https://github.com/user-attachments/assets/1f6035f8-f943-4d56-840e-38fcc0a9cb01)
+![KakaoTalk_20251211_131352580_02](https://github.com/user-attachments/assets/0c185fc1-d0fc-440e-8d02-92621d6868a4)
+![KakaoTalk_20251211_131352580_03](https://github.com/user-attachments/assets/1b8883d3-5351-483a-a690-48d2e1baffc6)
 
 ---
 
