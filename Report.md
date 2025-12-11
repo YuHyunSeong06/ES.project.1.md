@@ -166,7 +166,9 @@ void unlockChair() {
     * **LOCK 버튼 클릭:** 서보모터 잠금 신호(`L`) 전송 → 30초 카운트다운 시작 → 버튼이 **EMERGENCY**로 변경됨.
     * **타이머 종료/EMERGENCY 클릭:** 해제 신호(`U`) 전송 → 시스템 초기화.
 
-**[여기에 앱 인벤터 디자이너 화면 및 블록 코딩 캡처를 첨부하세요]**
+<img width="885" height="1061" alt="스크린샷 2025-12-11 121127" src="https://github.com/user-attachments/assets/c8090116-c257-473b-be16-e789c594cc5d" />
+<img width="726" height="526" alt="스크린샷 2025-12-11 121135" src="https://github.com/user-attachments/assets/966bc026-a150-4d50-a9e8-4a20aa62ff72" />
+
 
 ### 4.3. PC 모니터링 (Processing)
 * 아두이노와 Serial(USB) 통신을 통해 현재 센서 데이터 수신.
